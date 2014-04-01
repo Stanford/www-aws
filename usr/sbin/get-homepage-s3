@@ -1,0 +1,187 @@
+#!/bin/bash
+#
+# get-homepage-s3 -- get homepage content from AWS s3 bucket
+#
+# Written by Xueshan Feng <sfeng@stanford.edu>
+# Copyright 2014
+#     The Board of Trustees of the Leland Stanford Junior University
+#
+
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin; export PATH
+# s3cmd needs HOME env to run under supervise
+HOME=/root; export HOME
+
+# Hostname
+hostname=`hostname --fqdn`
+
+# S3 Bucket name, polling interval, and notifyaddress
+BUCKETCONF="/etc/www-aws/homepage-s3-bucket.conf"
+. $BUCKETCONF
+
+# S3 Bucket name, polling interval, and notifyaddress
+if [[ "X$hostname" =~ "X$AMIMASTER" ]];
+then
+    hostname=`hostname --short`
+else
+    instanceid=$(facter ec2_instance_id)
+    hostname="www-$instanceid"
+fi
+
+# for release file
+NOW=$(date +"%Y-%m-%d-%H%M%S")
+releasedir='/var/lib/homepage-poller'
+mkdir -p $releasedir 
+
+if [ -z "$MYBUCKET" -o -z "$POLLINGINTERVAL" -o -z "$NOTIFYADDRESS" ]; then
+    echo "MYBUCKET, POLLINGINTERVAL or NOTIFYADDRESS are missing in $BUCKETCONF."
+    exit 1
+fi
+
+prog=$(basename $0)
+logger="logger -t $prog"
+TMPFILE=$(mktemp -p /tmp $prog.XXXX) || exit 1
+
+# Source of the page: homepage, distweb, cron
+while [ $# != 0 ]; do
+    case $1 in
+        -d) daemon=$1; shift;;
+        -s) what_source=$2; shift; shift;;
+        -n) dryrun=$1; shift;;
+        -f) force=$1;
+            # Force to sync by altering content of current-release
+            # on localdisk
+            echo "F" >> /srv/www/current-release
+            shift;;
+        *)  echo "Unknown option"; exit 2;;
+    esac
+done
+
+# Find the source to sync from.  In the case of cron dir sync, also modify
+# the directory.
+home_source=$(s3cmd ls $MYBUCKET/ | grep '/srv/www/docs/' | awk '{print $2}')
+distweb_sources=$(s3cmd ls $MYBUCKET/ | grep DIR | grep -v '/srv/www/docs/' | awk '{print $2}')
+all_sources=$(s3cmd ls $MYBUCKET/ | grep DIR | awk '{print $2}')
+
+if [ -z "$home_source" -o -z "$distweb_sources" -o -z "$all_sources" ]; then
+    echo "One or more S3 buckets do not exist."
+    exit 1
+fi
+
+case $what_source in 
+    homepage)
+        source=$home_source
+        ;;
+    distweb)
+        source=$distweb_sources
+        ;;
+    cron)
+        source=${home_source}rw_includes/cron/
+        ;;
+    all)
+        source=$all_sources
+        ;;
+    *)
+        echo "$0: invalid source: $source"
+        echo "Usage: get-homepage-s3 [-d] [-n] [-f] -s <homepage|distweb|cron|all>"
+        exit 1
+        ;;
+esac
+
+# Downloading content from S3 
+[ ! -f /srv/www/current-release ] && touch /srv/www/current-release
+polling() {
+    s3cmd get --force $MYBUCKET/current-release $releasedir/release.get \
+        > /dev/null 2>&1
+    if ! diff /srv/www/current-release $releasedir/release.get > /dev/null ; then
+        $logger "Sync homepage from S3"
+        for src in $source
+        do
+            srcbase=`basename $src`
+            if [ "$srcbase" = "cron" ]; then
+                srcbase='docs/rw_includes/cron'
+            fi
+            echo "Copying from $src to /srv/www/$srcbase"
+            mkdir -p /srv/www/$srcbase
+            # Only send notification if there is new content
+            s3cmd $dryrun --delete-removed sync $src /srv/www/$srcbase/ > $TMPFILE 2>&1 
+            if [ -s $TMPFILE ]; then
+                /usr/bin/mailx -s "$hostname $prog downloaded new content" \
+                     $NOTIFYADDRESS -- -f root@www-aws-${ACCOUNTENV}.stanford.edu < $TMPFILE
+            fi
+        done
+        cp $releasedir/release.get /srv/www/current-release
+    fi
+}
+
+# Sync only once
+if [ "$daemon" != '-d' ]; then
+    polling
+    exit 0
+fi
+
+# Daemon mode
+while [ 1 ] ; do
+    polling
+    sleep $POLLINGINTERVAL
+done
+
+exit 0
+
+# Documentation
+DOCS=<<__END_OF_DOCS__
+
+=head1 NAME
+
+get-hompage-s3 - Sync homepage from AWS s3 bucket when new version is released.
+
+=head1 SYNOPSIS
+
+get-homepage-s3 [-d] [-n] -s <homepage|cron|distweb> 
+
+=head1 DESCRIPTION
+
+This script is designed to be run out of a supervised directory and runs
+in a continuous loop.  Every 30 seconds, get-homepage-s3 checks the current
+homepage release version by downloading a current-release file from S3 and 
+compares it with the local version stored in /srv/www directory. If S3's 
+version is newer, the script syncs changed files from S3.
+
+The script can find IAM role associated with this instance. No need 
+to download the credentials. You can see the credentials by running
+get -O /tmp/sts.$$ http://169.254.169.254/latest/meta-data/iam/security-credentials/sync-homepage-role.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-d> 
+
+Run in daemon mode. This should be used under daemon tool.
+
+=item B<-n> 
+
+Dry-run mode. Report what would be changed.
+
+=item B<-f> 
+
+Force a sync, regardless if homepage version is changed or not.
+
+=item B<-s> <homepage|distweb|cron|all> 
+
+The source of the content. Daemon tool should use "-s all" option.
+
+=back
+
+=head1 FILES
+
+/etc/webafs/homepage-s3-bucket.conf defines S3 bucket name and polling
+interval.
+
+=head1 AUTHORS
+
+Xueshan Feng <sfeng@stanford.edu>
+
+=cut
+
+__END_OF_DOCS__
+

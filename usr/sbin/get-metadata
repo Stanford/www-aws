@@ -1,0 +1,85 @@
+#!/bin/bash
+#
+# Retrieve the instance_id, and iam-role. Works on EC2 systems only. 
+# Useful during bootstrap.
+# 
+
+info=$1
+meta_data_url=http://169.254.169.254/latest/meta-data/
+
+case $info in
+    -i)
+        result=$(GET http://169.254.169.254/latest/meta-data/instance-id)
+        ;;
+    -r)
+        result=$(GET http://169.254.169.254/latest/meta-data/iam/info |grep -Po 'instance-profile/([a-zA-Z.-]+)'| sed -e 's/instance-profile\///')
+        ;;
+    -p)
+        result=$(GET http://169.254.169.254/latest/meta-data/public-hostname)
+        ;;
+    -z)
+        result=$(GET http://169.254.169.254/latest/meta-data/placement/availability-zone/ | sed -e 's/.$//')
+        ;;
+    -a)
+        result=$(wget -qO - $meta_data_url)
+        ;;
+    *)
+        echo "Usage: get-metadata <-i|-r|-z|-p|-a>"
+esac
+
+if [ ! -z "$result" ]; then
+    echo "$result"
+fi
+
+exit 0
+
+# Documentation
+DOCS=<<__END_OF_DOCS__
+
+=head1 NAME
+
+get-metadata -- Retrieve some common ec2 metata.
+
+=head1 SYNOPSIS
+
+get-metadata <-i|-r|-p|-z|-a>
+
+=head1 DESCRIPTION
+
+This script retrieves instance id, role, public ip and zone information
+for EC2's private URL http://169.254.169.254.
+
+=head1 OPTIONS
+
+=over 4
+
+=item B<-i>
+
+Get instance id.
+
+=item B<-r>
+
+Get instance role.
+
+=item B<-p>
+
+Get public IP.
+
+=item B<-z>
+
+Get availability zone.
+
+=item B<-a>
+
+Get all available metadata categories. 
+
+=back
+
+=head1 AUTHORS
+
+Xueshan Feng <sfeng@stanford.edu>
+
+=cut
+
+__END_OF_DOCS__
+

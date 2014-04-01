@@ -1,0 +1,72 @@
+#!/usr/bin/make -f
+
+# Uncomment this to turn on verbose mode.
+#export DH_VERBOSE=1
+
+PACKAGE = $(shell dh_listpackages)
+TMP = debian/$(PACKAGE)
+
+config.status:
+	dh_testdir
+
+build: build-stamp
+build-arch: build-stamp
+build-indep: build-stamp
+
+build-stamp:  config.status
+	dh_testdir
+	touch build-stamp
+
+clean:
+	dh_testdir
+	dh_testroot
+	rm -f build-stamp
+	dh_clean
+
+install:
+	dh_testdir
+	dh_testroot
+	dh_clean -k
+	dh_installdirs
+
+	cp -rp usr debian/$(PACKAGE)/
+
+	# Man pages.
+	install -d debian/$(PACKAGE)/usr/share/man/man1
+	set -e; for f in debian/$(PACKAGE)/usr/bin/* ; do \
+	    if grep -q ^=head1 $$f ; then \
+		pod2man -s 1 --center="User Commands" $$f \
+		    > $(TMP)/usr/share/man/man1/`basename $$f`.1 ; \
+	    fi ; \
+	done
+	install -d debian/$(PACKAGE)/usr/share/man/man8
+	set -e; for f in debian/$(PACKAGE)/usr/sbin/* ; do \
+	    if grep -q ^=head1 $$f ; then \
+		pod2man -s 8 --center="System Commands" $$f \
+		    > $(TMP)/usr/share/man/man8/`basename $$f`.8 ; \
+	    fi ; \
+	done
+
+# Build architecture-independent files here.
+binary-indep: build install
+	dh_testdir
+	dh_testroot
+	dh_installchangelogs
+	dh_installdocs
+	dh_installexamples
+	dh_installman
+	dh_strip
+	dh_compress
+	dh_fixperms
+	dh_installdeb
+	dh_shlibdeps
+	dh_gencontrol
+	dh_md5sums
+	dh_builddeb
+
+# Build architecture-dependent files here.
+binary-arch: build install
+# We have nothing to do by default.
+
+binary: binary-indep binary-arch
+.PHONY: build clean binary-indep binary-arch binary install

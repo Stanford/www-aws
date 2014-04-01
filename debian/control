@@ -1,0 +1,12 @@
+Source: stanford-server-www-aws
+Section: web
+Priority: optional
+Maintainer: Xueshan Feng <sfeng@stanford.edu>
+Standards-Version: 3.8.3
+
+Package: stanford-server-www-aws
+Architecture: all
+Depends: ${misc:Depends}
+Description: Support scripts for the Stanford www aws servers
+ The scripts used on the Stanford www servers to manage homepage content
+ upload/download.

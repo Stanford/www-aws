@@ -1,0 +1,165 @@
+#!/bin/bash
+# aws-tripwire-backend -- remctl backend for tripwire check and update.
+#
+# Written by Xueshan Feng <sfeng@stanford.edu> based on Russ Allbery's 
+# tripwire-backend. Modified to use service/www to access AFS tw directory.
+#
+# Copyright 2014 Board of Trustees, Leland Stanford Jr. University
+
+# Set a sane default PATH.
+PATH=/bin:/usr/bin; export PATH
+
+# Defaults for report address and mail program 
+address=tripwire@devnull.stanford.edu
+mail=mail
+
+# Pull configuration from the system configuration file if it exists.
+if [ -r /etc/tripwire/config ] ; then
+    . /etc/tripwire/config
+fi
+
+# AWS machines use service/www to access AFS tripwire database and config
+KRB5CCNAME='/var/run/web/www.k5.tgt'
+export KRB5CCNAME
+if ! /usr/bin/aklog; then
+    echo "$0: unable to get AFS token."
+    exit 1
+fi
+
+# AWS environment configurations
+. /etc/www-aws/homepage-s3-bucket.conf
+
+DEFAULT=/afs/ir/site/leland/tripwire
+twdir="$DEFAULT/$AMIMASTER"
+
+hostname=`hostname --fqdn`
+if [[ "X$hostname" =~ "X$AMIMASTER" ]]
+then
+    hostname=`hostname --short`
+else
+    hostname="www-$(facter ec2_instance_id)"
+fi
+
+if [ ! -d $twdir ] ; then
+    echo "$twdir doesn't exist."
+    exit 1
+fi
+
+TWCMD=/afs/ir/site/leland/tripwire/bin/tripwire 
+DB="-d $twdir/tw.db"
+CONF="-c $twdir/tw.config"
+
+command="$1"
+shift
+case "$command" in
+    check)
+        $TWCMD $DB $CONF
+        ;;
+    init)
+        cd /root/tmp
+        $TWCMD $CONF -init >/dev/null
+        if [ $? != 0 ] ; then
+            echo 'tripwire failed' >&2
+            exit 1
+        fi
+        cat /root/tmp/databases/tw.db
+        rm -rf /root/tmp/databases
+        exit 0
+        ;;
+    mail)
+        date=`date +%Y-%m-%d`
+        subject="$hostname tripwire report - $date"
+        $TWCMD $DB $CONF 2>&1 | $mail -s "$subject" $address -- -f ${SENDER}
+        exit 0
+        ;;
+    update)
+        cd /root/tmp
+        if [ -z "$1" ] ; then
+            echo 'No files given for tripwire update' >&2
+            exit 1
+        fi
+        $TWCMD $DB $CONF -update "$@" >/dev/null
+        if [ $? != 0 ] ; then
+            echo 'tripwire failed' >&2
+            exit 1
+        fi
+        cat /root/tmp/databases/tw.db
+        rm -rf /root/tmp/databases
+        exit 0
+        ;;
+    help)
+        cat <<EOF
+Tripwire remctl help:
+  tripwire check                Run tripwire and return the results
+  tripwire init                 Reinitialize tripwire and return new database
+  tripwire mail                 Run the nightly tripwire cron job
+  tripwire update <file> ...    Update files and return new database
+EOF
+        exit 0
+        ;;
+    *)
+        echo "Unknown command $command" 2>&1
+        exit 1
+        ;;
+    esac
+exit 0
+
+# Documentation.  Use a hack to hide this from the shell.  Because of the
+# above exit line, this should never be executed.
+DOCS=<<__END_OF_DOCS__
+
+=head1 NAME
+
+aws-tripwire-backend - remctl backend for tripwire check and update
+
+=head1 SYNOPSIS
+
+B<aws-tripwire-backend> ( check | help | init | mail )
+
+B<aws-tripwire-backend> update I<file> [I<file> ...]
+
+=head1 DESCRIPTION
+
+B<aws-tripwire-backend> provides a remctl interface to run B<tripwire> on the
+system and possibly update and return an updated tripwire database.  It
+supports several commands:
+
+=over 4
+
+=item check
+
+Runs C<tripwire> and returns whatever B<tripwire> returns.  This will show
+you the absolutely current tripwire report.  It will exit with a non-zero
+exit status if the report isn't clean.
+
+=item help
+
+Prints out a summary of supported commands.
+
+=item init
+
+Runs C<tripwire -init> and returns the new database on standard output.
+If there are any errors, returns them on standard error and exits with a
+non-zero exit status.
+
+=item mail
+
+Sends the current tripwire report to the configured e-mail address for
+processing.
+
+=item update I<file> [I<file> ...]
+
+Generates a new tripwire database, updating the database entries for all
+of the provided I<file> paths, and returns the new database on standard
+output.  If there are any errors, returns them on standard error and exits
+with a non-zero exit status.
+
+=back
+
+=head1 AUTHOR
+
+Xueshan Feng <sfeng@stanford.edu>
+
+=cut
+
+__END_OF_DOCS__
