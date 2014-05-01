@@ -23,7 +23,7 @@ if [[ "X$hostname" =~ "X$AMIMASTER" ]];
 then
     hostname=`hostname --short`
 else
-    instanceid=$(facter ec2_instance_id)
+    instanceid=$(get-metadata -i)
     hostname="www-$instanceid"
 fi
 

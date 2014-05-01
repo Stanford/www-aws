@@ -37,7 +37,7 @@ if [[ "X$hostname" =~ "X$AMIMASTER" ]]
 then
     hostname=`hostname --short`
 else
-    hostname="www-$(facter ec2_instance_id)"
+    hostname="www-$(get-metadata -i)"
 fi
 
 if [ ! -d $twdir ] ; then

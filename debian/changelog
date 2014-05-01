@@ -1,3 +1,10 @@
+stanford-server-www-aws (2) unstable; urgency=low
+
+  * removed facter dependency for instance id. facter breaks (not getting ec2
+    data). 
+
+ -- Xueshan Feng <sfeng@stanford.edu>  Wed, 30 Apr 2014 18:54:38 -0700
+
 stanford-server-www-aws (1) unstable; urgency=low
   * Initial release.
 
