@@ -1,0 +1,51 @@
+#!/bin/bash
+#
+# sync-homepage-cgi -- Sync some homepage/cgi-bin script to local
+#
+# Written by Xueshan Feng <sfeng@stanford.edu>
+#
+# Copyright 2014
+#     The Board of Trustees of the Leland Stanford Junior University
+
+hostname=`hostname --fqdn`
+
+# Add the usual executable directories to the default path.
+PATH=/usr/sbin:/sbin:/usr/bin:/bin:/usr/local/bin ; export PATH
+
+# Obtain a token using the existing admin ticket.
+KRB5CCNAME="/var/run/web/www.k5.tgt"
+export KRB5CCNAME
+/usr/bin/aklog
+
+fromdir='/afs/ir/group/homepage/cgi-bin/'
+todir='/srv/homepage/cgi-bin/'
+mkdir -p $todir
+rsync -avz $fromdir $todir
+
+exit 0
+
+# Documentation
+DOCS=<<__END_OF_DOCS__
+
+=head1 NAME
+
+put-homepage-s3 -- Back up WWW homepage to AWS S3 bucket
+
+=head1 SYNOPSIS
+
+sync-homepage-cgi
+
+=head1 DESCRIPTION
+
+This script is made to sync /afs/ir/group/homepage/cgi-bin directoryto local
+disk so the search code can be served out of local disk instead of redirect
+back to campus.
+
+=head1 AUTHORS
+
+Xueshan Feng <sfeng@stanford.edu>
+
+=cut
+
+__END_OF_DOCS__
+

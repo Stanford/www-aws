@@ -37,7 +37,8 @@ if [[ "X$hostname" =~ "X$AMIMASTER" ]]
 then
     hostname=`hostname --short`
 else
-    hostname="www-$(get-metadata -i)"
+    hostname="www-$(get-metadata -i)-$ACCOUNTENV"
+    twdir="www-aws-$ACCOUNTENV"
 fi
 
 if [ ! -d $twdir ] ; then
