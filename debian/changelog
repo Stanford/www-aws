@@ -1,3 +1,9 @@
+stanford-server-www-aws (4) unstable; urgency=low
+
+  * fixed aws-tripwire-backend bug (path for metadata). 
+
+ -- Xueshan Feng <sfeng@stanford.edu>  Sun, 04 May 2014 22:39:10 -0700
+
 stanford-server-www-aws (3) unstable; urgency=low
 
   * added sync-homepage-cgi program. 

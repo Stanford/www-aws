@@ -7,7 +7,7 @@
 # Copyright 2014 Board of Trustees, Leland Stanford Jr. University
 
 # Set a sane default PATH.
-PATH=/bin:/usr/bin; export PATH
+PATH=/bin:/usr/bin:/usr/sbin; export PATH
 
 # Defaults for report address and mail program 
 address=tripwire@devnull.stanford.edu
@@ -38,7 +38,7 @@ then
     hostname=`hostname --short`
 else
     hostname="www-$(get-metadata -i)-$ACCOUNTENV"
-    twdir="www-aws-$ACCOUNTENV"
+    twdir="$DEFAULT/www-aws-$ACCOUNTENV.stanford.edu"
 fi
 
 if [ ! -d $twdir ] ; then
